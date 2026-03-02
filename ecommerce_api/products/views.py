@@ -3,6 +3,10 @@ from .models import Product, Category
 from .serializers import ProductSerializer, CategorySerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from .models import Order
+from .serializers import OrderSerializer
+from rest_framework.permissions import IsAuthenticated
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -18,3 +22,15 @@ class ProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['category', 'price', 'stock_quantity']
     search_fields = ['name', 'description']
     ordering_fields = ['price', 'created_at']
+
+
+class OrderViewSet(viewsets.ModelViewSet):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Users can only see their own orders
+        return Order.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
