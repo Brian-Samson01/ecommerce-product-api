@@ -6,7 +6,8 @@ from rest_framework import filters
 from .models import Order
 from .serializers import OrderSerializer
 from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -34,3 +35,10 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+@action(detail=True, methods=["post"])
+def complete(self, request, pk=None):
+    order = self.get_object()
+    order.is_completed = True
+    order.save()
+    return Response({"message": "Order marked as completed"})
