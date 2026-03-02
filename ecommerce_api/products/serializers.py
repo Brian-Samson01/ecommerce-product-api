@@ -1,8 +1,7 @@
 from rest_framework import serializers
-from .models import Product, Category
-from .models import Order, OrderItem
+from .models import Product, Category, Order, OrderItem
 from django.db import transaction
-from rest_framework import serializers
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -27,6 +26,7 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Stock cannot be negative.")
         return value
 
+
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source="product.name")
     product_price = serializers.ReadOnlyField(source="product.price")
@@ -43,7 +43,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "total_price",
         ]
 
- class OrderSerializer(serializers.ModelSerializer):
+
+class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     total_price = serializers.ReadOnlyField()
 
@@ -62,27 +63,27 @@ class OrderItemSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop("items")
 
-    with transaction.atomic():
-        order = Order.objects.create(**validated_data)
+        with transaction.atomic():
+            order = Order.objects.create(**validated_data)
 
-        for item_data in items_data:
-            product = item_data["product"]
-            quantity = item_data["quantity"]
+            for item_data in items_data:
+                product = item_data["product"]
+                quantity = item_data["quantity"]
 
-            # ✅ Check stock availability
-            if product.stock_quantity < quantity:
-                raise serializers.ValidationError(
-                    f"Not enough stock for {product.name}"
+                # Check stock availability
+                if product.stock_quantity < quantity:
+                    raise serializers.ValidationError(
+                        f"Not enough stock for {product.name}"
+                    )
+
+                # Reduce stock
+                product.stock_quantity -= quantity
+                product.save()
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=quantity,
                 )
 
-            # ✅ Reduce stock
-            product.stock_quantity -= quantity
-            product.save()
-
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=quantity,
-            )
-
-        return order    
+        return order

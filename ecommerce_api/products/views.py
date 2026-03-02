@@ -1,16 +1,16 @@
 from rest_framework import viewsets
-from .models import Product, Category
-from .serializers import ProductSerializer, CategorySerializer
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
-from .models import Order
-from .serializers import OrderSerializer
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import transaction
-from .permissions import IsAdminOrReadOnly
 from rest_framework.exceptions import PermissionDenied
+from django.db import transaction
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .models import Product, Category, Order
+from .serializers import ProductSerializer, CategorySerializer, OrderSerializer
+from .permissions import IsAdminOrReadOnly
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -30,6 +30,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
@@ -42,33 +43,33 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         obj = super().get_object()
-    if obj.user != self.request.user:
-        raise PermissionDenied("You cannot access this order.")
-    return obj
+        if obj.user != self.request.user:
+            raise PermissionDenied("You cannot access this order.")
+        return obj
 
-@action(detail=True, methods=["post"])
-def complete(self, request, pk=None):
-    order = self.get_object()
-    order.is_completed = True
-    order.save()
-    return Response({"message": "Order marked as completed"})
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        order = self.get_object()
+        order.is_completed = True
+        order.save()
+        return Response({"message": "Order marked as completed"})
 
-@action(detail=True, methods=["post"])
-def cancel(self, request, pk=None):
-    order = self.get_object()
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
 
-    if order.is_completed:
-        return Response(
-            {"error": "Completed orders cannot be cancelled"},
-            status=400
-        )
+        if order.is_completed:
+            return Response(
+                {"error": "Completed orders cannot be cancelled"},
+                status=400
+            )
 
-    with transaction.atomic():
-        for item in order.items.all():
-            product = item.product
-            product.stock_quantity += item.quantity
-            product.save()
+        with transaction.atomic():
+            for item in order.items.all():
+                product = item.product
+                product.stock_quantity += item.quantity
+                product.save()
 
-        order.delete()
+            order.delete()
 
-    return Response({"message": "Order cancelled and stock restored"})
+        return Response({"message": "Order cancelled and stock restored"})
