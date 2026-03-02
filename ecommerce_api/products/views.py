@@ -8,10 +8,14 @@ from .serializers import OrderSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction
+from .permissions import IsAdminOrReadOnly
+from rest_framework.exceptions import PermissionDenied
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -36,6 +40,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    def get_object(self):
+        obj = super().get_object()
+    if obj.user != self.request.user:
+        raise PermissionDenied("You cannot access this order.")
+    return obj
+
 @action(detail=True, methods=["post"])
 def complete(self, request, pk=None):
     order = self.get_object()
@@ -53,12 +63,12 @@ def cancel(self, request, pk=None):
             status=400
         )
 
-    # Restore stock
-    for item in order.items.all():
-        product = item.product
-        product.stock_quantity += item.quantity
-        product.save()
+    with transaction.atomic():
+        for item in order.items.all():
+            product = item.product
+            product.stock_quantity += item.quantity
+            product.save()
 
-    order.delete()
+        order.delete()
 
     return Response({"message": "Order cancelled and stock restored"})
