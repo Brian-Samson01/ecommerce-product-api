@@ -42,3 +42,23 @@ def complete(self, request, pk=None):
     order.is_completed = True
     order.save()
     return Response({"message": "Order marked as completed"})
+
+@action(detail=True, methods=["post"])
+def cancel(self, request, pk=None):
+    order = self.get_object()
+
+    if order.is_completed:
+        return Response(
+            {"error": "Completed orders cannot be cancelled"},
+            status=400
+        )
+
+    # Restore stock
+    for item in order.items.all():
+        product = item.product
+        product.stock_quantity += item.quantity
+        product.save()
+
+    order.delete()
+
+    return Response({"message": "Order cancelled and stock restored"})
