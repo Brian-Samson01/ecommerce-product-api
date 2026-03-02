@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import Product, Category
 from .models import Order, OrderItem
-
+from django.db import transaction
+from rest_framework import serializers
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -50,9 +51,28 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
+
+    with transaction.atomic():
         order = Order.objects.create(**validated_data)
 
         for item_data in items_data:
-            OrderItem.objects.create(order=order, **item_data)
+            product = item_data["product"]
+            quantity = item_data["quantity"]
 
-        return order       
+            # ✅ Check stock availability
+            if product.stock_quantity < quantity:
+                raise serializers.ValidationError(
+                    f"Not enough stock for {product.name}"
+                )
+
+            # ✅ Reduce stock
+            product.stock_quantity -= quantity
+            product.save()
+
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                quantity=quantity,
+            )
+
+        return order    
