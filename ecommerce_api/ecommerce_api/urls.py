@@ -18,12 +18,32 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
 
+
+def api_home(request):
+    return JsonResponse(
+        {
+            "name": "Ecommerce Product API",
+            "endpoints": {
+                "products": "/api/products/",
+                "categories": "/api/categories/",
+                "orders": "/api/orders/",
+                "register": "/api/accounts/register/",
+                "token": "/api/token/",
+                "token_refresh": "/api/token/refresh/",
+                "admin": "/admin/",
+            },
+        }
+    )
+
+
 urlpatterns = [
+    path("", api_home, name="api_home"),
     path('admin/', admin.site.urls),
     path('api/', include('products.urls')),
     path("api/accounts/", include("accounts.urls")),

@@ -1,5 +1,6 @@
 from rest_framework import viewsets
 from rest_framework import filters
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,13 +14,13 @@ from .permissions import IsAdminOrReadOnly
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
+    queryset = Category.objects.all().order_by("name")
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().order_by("-created_at")
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -33,10 +34,11 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
         # Users can only see their own orders
-        return Order.objects.filter(user=self.request.user)
+        return Order.objects.filter(user=self.request.user).order_by("-created_at")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -54,14 +56,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.save()
         return Response({"message": "Order marked as completed"})
 
-    @action(detail=True, methods=["post"])
-    def cancel(self, request, pk=None):
-        order = self.get_object()
-
+    def _cancel_order(self, order):
         if order.is_completed:
             return Response(
                 {"error": "Completed orders cannot be cancelled"},
-                status=400
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         with transaction.atomic():
@@ -73,3 +72,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             order.delete()
 
         return Response({"message": "Order cancelled and stock restored"})
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
+        return self._cancel_order(order)
+
+    def destroy(self, request, *args, **kwargs):
+        order = self.get_object()
+        return self._cancel_order(order)

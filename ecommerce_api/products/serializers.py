@@ -43,6 +43,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "total_price",
         ]
 
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Quantity must be greater than zero.")
+        return value
+
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
@@ -58,7 +63,12 @@ class OrderSerializer(serializers.ModelSerializer):
             "items",
             "total_price",
         ]
-        read_only_fields = ["user"]
+        read_only_fields = ["user", "created_at", "is_completed", "total_price"]
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("Order must include at least one item.")
+        return value
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
